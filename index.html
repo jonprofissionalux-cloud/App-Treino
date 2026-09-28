@@ -11,7 +11,7 @@
 :root{
   --bg:#0D0D0D; --card:#1A1A18; --ink:#F5F1E8; --sub:#948D7E; --line:#2E2B25;
   --accent:#F5C518; --accent-ink:#0D0D0D;
-  --peito:#D98E3D; --costas:#D9583B; --pernas:#4F86BF; --ombro:#7FAE5C; --upper:#B07FCC;
+  --peito:#D98E3D; --costas:#D9583B; --pernas:#4F86BF; --ombro:#7FAE5C; --upper:#B07FCC; --iso:#3DD6D0;
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
@@ -140,6 +140,27 @@ footer{text-align:center; color:var(--sub); font-size:11.5px; padding:10px 20px 
 .evo-hist .trail{font-size:13px; color:var(--sub); display:flex; flex-wrap:wrap; gap:4px 10px;}
 .evo-hist .trail b{color:var(--ink);}
 .evo-empty{color:var(--sub); font-size:13.5px; padding:10px 2px;}
+
+.iso-card{background:var(--card); border:1.5px dashed var(--iso); border-radius:14px; padding:14px 16px; margin-bottom:10px;}
+.iso-card.alert{background:var(--iso); border-style:solid; animation:pulseGlow 1.2s ease-in-out infinite;}
+.iso-card.alert *{color:#0D0D0D !important;}
+.iso-top{display:flex; justify-content:space-between; align-items:center; gap:10px;}
+.iso-title{font-weight:600; font-size:16px; color:var(--iso);}
+.iso-sub{font-size:12px; color:var(--sub); margin-top:2px;}
+.iso-num{font-family:'Oswald',sans-serif; font-size:44px; font-weight:700; line-height:1; color:var(--ink);}
+.iso-actions{display:flex; gap:8px; margin-top:12px;}
+.iso-btn{flex:1; border:none; border-radius:10px; padding:11px; font-weight:700; font-size:14px; cursor:pointer; background:var(--iso); color:#0D0D0D;}
+.iso-btn.ghost{flex:0 0 auto; background:transparent; border:1px solid var(--line); color:var(--ink); padding:11px 16px;}
+.iso-card.alert .iso-btn{background:#0D0D0D; color:var(--iso) !important;}
+.iso-card.warn{border:2px solid var(--accent);}
+.iso-card.warn .iso-num{color:var(--accent);}
+.iso-card.danger{border:2px solid #FF3B30; animation:pulseRed .8s ease-in-out infinite;}
+.iso-card.danger .iso-num{color:#FF3B30;}
+@keyframes pulseRed{
+  0%,100%{ box-shadow:0 0 0 0 rgba(255,59,48,0); transform:scale(1); }
+  50%{ box-shadow:0 0 0 4px rgba(255,59,48,.55), 0 0 22px rgba(255,59,48,.6); transform:scale(1.015); }
+}
+.wake{cursor:pointer; display:inline-block; margin-top:6px;}
 </style>
 </head>
 <body>
@@ -153,7 +174,7 @@ footer{text-align:center; color:var(--sub); font-size:11.5px; padding:10px 20px 
 <div class="tabs" id="tabs"></div>
 <div class="daycaption" id="daycaption"></div>
 <main id="main"></main>
-<footer>Salvo neste aparelho.</footer>
+<footer>Salvo neste aparelho.<br><span class="wake" id="wakeStatus"></span></footer>
 
 <div class="evo-panel" id="evoPanel">
   <div class="evo-head"><h2>📊 Sua evolução</h2><button class="tbtn" id="closeEvo">Fechar</button></div>
@@ -292,15 +313,89 @@ function beep(){
   }catch(e){}
 }
 
-let activeTimer = null; // {cardKey, remaining, alerting}
+const ISO_SECONDS = 60;
+let iso = {running:false, remaining:ISO_SECONDS, finished:false, endAt:0};
+let isoInterval = null;
+function isoLevel(){
+  if(iso.running && !iso.finished){
+    if(iso.remaining <= 8) return 'danger';
+    if(iso.remaining <= 15) return 'warn';
+  }
+  return '';
+}
+function isoTick(){
+  if(!iso.running) return;
+  iso.remaining = Math.max(0, Math.ceil((iso.endAt - Date.now())/1000));
+  if(iso.remaining <= 0){
+    clearInterval(isoInterval); isoInterval = null;
+    iso.running = false; iso.finished = true; iso.remaining = 0;
+    persistTimers();
+    beep();
+    if(navigator.vibrate) navigator.vibrate([250,120,250,120,450]);
+    render();
+    setTimeout(()=>{ iso = {running:false, remaining:ISO_SECONDS, finished:false, endAt:0}; persistTimers(); render(); }, 6000);
+  } else {
+    const el = document.getElementById('isoNum');
+    if(el) el.textContent = iso.remaining;
+    const card = document.getElementById('isoCard');
+    if(card) card.className = 'iso-card ' + isoLevel();
+  }
+}
+function isoAction(act){
+  if(act==='start'){
+    if(iso.finished) iso = {running:false, remaining:ISO_SECONDS, finished:false, endAt:0};
+    iso.running = true;
+    iso.endAt = Date.now() + iso.remaining*1000;
+    if(isoInterval) clearInterval(isoInterval);
+    isoInterval = setInterval(isoTick, 1000);
+  } else if(act==='pause'){
+    if(iso.running) iso.remaining = Math.max(1, Math.ceil((iso.endAt - Date.now())/1000));
+    if(isoInterval) clearInterval(isoInterval);
+    isoInterval = null; iso.running = false;
+  } else if(act==='reset'){
+    if(isoInterval) clearInterval(isoInterval);
+    isoInterval = null;
+    iso = {running:false, remaining:ISO_SECONDS, finished:false, endAt:0};
+  }
+  persistTimers();
+  render();
+}
+function isoCardHTML(){
+  if(iso.finished){
+    return `<div class="iso-card alert">
+      <div class="iso-top"><div><div class="iso-title">Isometria concluída! 💪</div><div class="iso-sub">Boa!</div></div><div class="iso-num">0</div></div>
+      <div class="iso-actions"><button class="iso-btn" data-iso="reset">Reiniciar</button></div>
+    </div>`;
+  }
+  const started = iso.remaining < ISO_SECONDS;
+  const mainBtn = iso.running
+    ? `<button class="iso-btn" data-iso="pause">⏸ Pausar</button>`
+    : `<button class="iso-btn" data-iso="start">${started ? '▶ Continuar' : '▶ Iniciar '+ISO_SECONDS+'s'}</button>`;
+  const resetBtn = (started || iso.running) ? `<button class="iso-btn ghost" data-iso="reset">↺</button>` : '';
+  return `<div class="iso-card ${isoLevel()}" id="isoCard">
+    <div class="iso-top"><div><div class="iso-title">⏱ Isometria</div><div class="iso-sub">Opcional • contagem regressiva de ${ISO_SECONDS}s</div></div><div class="iso-num" id="isoNum">${iso.remaining}</div></div>
+    <div class="iso-actions">${mainBtn}${resetBtn}</div>
+  </div>`;
+}
+
+let activeTimer = null; // {cardKey, remaining, alerting, endAt}
+function persistTimers(){
+  try{
+    localStorage.setItem('treino-timers', JSON.stringify({
+      rest: (activeTimer && !activeTimer.alerting) ? {cardKey:activeTimer.cardKey, endAt:activeTimer.endAt} : null,
+      iso: {running:iso.running, remaining:iso.remaining, endAt:iso.endAt}
+    }));
+  }catch(e){}
+}
 
 function timerTick(){
-  if(!activeTimer) return;
-  activeTimer.remaining--;
+  if(!activeTimer || activeTimer.alerting) return;
+  activeTimer.remaining = Math.max(0, Math.ceil((activeTimer.endAt - Date.now())/1000));
   const box = document.getElementById('cardtimer-'+activeTimer.cardKey);
   if(activeTimer.remaining <= 0){
     clearInterval(timerInterval); timerInterval = null;
     activeTimer.alerting = true;
+    persistTimers();
     beep();
     if(navigator.vibrate) navigator.vibrate([250,120,250,120,450]);
     renderCardTimer(activeTimer.cardKey);
@@ -312,7 +407,8 @@ function timerTick(){
 function startTimer(cardKey, sec){
   restDuration = sec;
   localStorage.setItem('treino-rest', sec);
-  activeTimer = {cardKey, remaining:sec, alerting:false};
+  activeTimer = {cardKey, remaining:sec, alerting:false, endAt:Date.now()+sec*1000};
+  persistTimers();
   if(timerInterval) clearInterval(timerInterval);
   timerInterval = setInterval(timerTick, 1000);
   renderCardTimer(cardKey);
@@ -338,10 +434,10 @@ function renderCardTimer(cardKey){
 }
 function bindCardTimerEvents(main){
   main.querySelectorAll('[data-tadd]').forEach(b=>{
-    b.onclick = ()=>{ if(activeTimer){ activeTimer.remaining += 15; renderCardTimer(activeTimer.cardKey); } };
+    b.onclick = ()=>{ if(activeTimer){ activeTimer.endAt += 15000; activeTimer.remaining += 15; persistTimers(); renderCardTimer(activeTimer.cardKey); } };
   });
   main.querySelectorAll('[data-tskip]').forEach(b=>{
-    b.onclick = ()=>{ if(timerInterval) clearInterval(timerInterval); activeTimer = null; render(); };
+    b.onclick = ()=>{ if(timerInterval) clearInterval(timerInterval); activeTimer = null; persistTimers(); render(); };
   });
 }
 
@@ -387,6 +483,52 @@ function renderEvo(){
 }
 document.getElementById('openEvo').onclick = ()=>{ renderEvo(); document.getElementById('evoPanel').classList.add('show'); };
 document.getElementById('closeEvo').onclick = ()=>{ document.getElementById('evoPanel').classList.remove('show'); };
+
+// Retoma cronômetros se a página foi recarregada no meio do descanso
+try{
+  const t = JSON.parse(localStorage.getItem('treino-timers')||'{}');
+  if(t.rest && t.rest.endAt > Date.now()){
+    activeTimer = {cardKey:t.rest.cardKey, remaining:Math.ceil((t.rest.endAt-Date.now())/1000), alerting:false, endAt:t.rest.endAt};
+    timerInterval = setInterval(timerTick, 1000);
+  }
+  if(t.iso){
+    if(t.iso.running && t.iso.endAt > Date.now()){
+      iso = {running:true, remaining:Math.ceil((t.iso.endAt-Date.now())/1000), finished:false, endAt:t.iso.endAt};
+      isoInterval = setInterval(isoTick, 1000);
+    } else if(!t.iso.running && t.iso.remaining > 0 && t.iso.remaining < ISO_SECONDS){
+      iso = {running:false, remaining:t.iso.remaining, finished:false, endAt:0};
+    }
+  }
+}catch(e){}
+
+// Manter a tela ligada enquanto o app estiver aberto
+let wakeLock = null;
+function updateWakeStatus(){
+  const el = document.getElementById('wakeStatus');
+  if(!el) return;
+  if(wakeLock) el.textContent = '🔆 Tela sempre ligada enquanto o app estiver aberto';
+  else if('wakeLock' in navigator) el.textContent = '🌙 Tela pode apagar — toque aqui pra manter ligada';
+  else el.textContent = 'Este navegador não permite manter a tela ligada';
+}
+async function requestWakeLock(){
+  try{
+    if('wakeLock' in navigator && !wakeLock){
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', ()=>{ wakeLock = null; updateWakeStatus(); });
+    }
+  }catch(e){ wakeLock = null; }
+  updateWakeStatus();
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible'){
+    requestWakeLock();
+    if(activeTimer && !activeTimer.alerting) timerTick();
+    if(iso.running) isoTick();
+  }
+});
+document.addEventListener('pointerdown', ()=>{ if(!wakeLock) requestWakeLock(); }, {once:false});
+document.getElementById('wakeStatus').onclick = requestWakeLock;
+requestWakeLock();
 
 let active = localStorage.getItem('treino-active-day') || DAYS[0].id;
 if(!DAYS.find(d=>d.id===active)) active = DAYS[0].id;
@@ -446,7 +588,7 @@ function render(){
     </div>`;
   }).join('');
 
-  main.innerHTML = banner + cardsHTML;
+  main.innerHTML = banner + cardsHTML + isoCardHTML();
 
   const restartBtn = document.getElementById('restartDay');
   if(restartBtn) restartBtn.onclick = ()=>{
@@ -480,10 +622,12 @@ function render(){
       else {
         if(timerInterval) clearInterval(timerInterval);
         activeTimer = null;
+        persistTimers();
         render();
       }
     };
   });
+  main.querySelectorAll('[data-iso]').forEach(b=>{ b.onclick = ()=> isoAction(b.dataset.iso); });
   bindCardTimerEvents(main);
 }
 render();
