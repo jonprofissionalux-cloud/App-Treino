@@ -140,6 +140,12 @@ footer{text-align:center; color:var(--sub); font-size:11.5px; padding:10px 20px 
 .evo-hist .name{font-weight:600; font-size:15px; margin-bottom:6px;}
 .evo-hist .trail{font-size:13px; color:var(--sub); display:flex; flex-wrap:wrap; gap:4px 10px;}
 .evo-hist .trail b{color:var(--ink);}
+.evo-bar-row{display:flex; align-items:center; gap:8px; margin-bottom:7px;}
+.evo-bar-row:last-child{margin-bottom:0;}
+.evo-bar-date{width:38px; font-size:10.5px; color:var(--sub); flex:0 0 auto;}
+.evo-bar-track{flex:1; background:var(--line); border-radius:6px; height:16px; overflow:hidden;}
+.evo-bar-fill{background:var(--accent); height:100%; border-radius:6px 0 0 6px; min-width:6%; transition:width .3s ease;}
+.evo-bar-val{width:48px; text-align:right; font-size:12.5px; font-weight:700; color:var(--ink); flex:0 0 auto; font-family:'Oswald',sans-serif;}
 .evo-empty{color:var(--sub); font-size:13.5px; padding:10px 2px;}
 
 .iso-card{background:var(--card); border:1.5px dashed var(--iso); border-radius:14px; padding:14px 16px; margin-bottom:10px;}
@@ -507,8 +513,18 @@ function renderEvo(){
     evoHist.innerHTML = '<div class="evo-empty">Assim que você mudar uma carga, o histórico aparece aqui.</div>';
   } else {
     evoHist.innerHTML = histKeys.map(k=>{
-      const trail = histWeights[k].slice(-8).map(e=>`<span><b>${e.w}kg</b> (${e.date.slice(8,10)}/${e.date.slice(5,7)})</span>`).join('');
-      return `<div class="evo-hist"><div class="name">${exLabels[k]||k}</div><div class="trail">${trail}</div></div>`;
+      const entries = histWeights[k].slice(-8).slice().reverse(); // mais recente primeiro
+      const max = Math.max(...entries.map(e=>e.w), 1);
+      const rows = entries.map(e=>{
+        const pct = Math.max(6, Math.round((e.w/max)*100));
+        const dateLbl = e.date.slice(8,10)+'/'+e.date.slice(5,7);
+        return `<div class="evo-bar-row">
+          <span class="evo-bar-date">${dateLbl}</span>
+          <div class="evo-bar-track"><div class="evo-bar-fill" style="width:${pct}%"></div></div>
+          <span class="evo-bar-val">${e.w}kg</span>
+        </div>`;
+      }).join('');
+      return `<div class="evo-hist"><div class="name">${exLabels[k]||k}</div>${rows}</div>`;
     }).join('');
   }
 }
