@@ -140,6 +140,7 @@ footer{text-align:center; color:var(--sub); font-size:11.5px; padding:10px 20px 
 .evo-hist .name{font-weight:600; font-size:15px; margin-bottom:6px;}
 .evo-hist .trail{font-size:13px; color:var(--sub); display:flex; flex-wrap:wrap; gap:4px 10px;}
 .evo-hist .trail b{color:var(--ink);}
+.evo-linechart{margin-top:4px;}
 .evo-bar-row{display:flex; align-items:center; gap:8px; margin-bottom:7px;}
 .evo-bar-row:last-child{margin-bottom:0;}
 .evo-bar-date{width:38px; font-size:10.5px; color:var(--sub); flex:0 0 auto;}
@@ -485,6 +486,43 @@ function getWeekRange(d){
   const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
   return [monday.toISOString().slice(0,10), sunday.toISOString().slice(0,10)];
 }
+function lineChartSVG(entries, uid){
+  const w = 300, h = 152, padX = 20, padTop = 26, padBottom = 30;
+  const innerW = w - padX*2, innerH = h - padTop - padBottom;
+  const gid = 'evoglow-' + uid;
+  const vals = entries.map(e=>e.w);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = (max - min) || 1;
+  const pts = entries.map((e,i)=>{
+    const x = entries.length===1 ? padX+innerW/2 : padX + (i/(entries.length-1))*innerW;
+    const y = padTop + innerH - ((e.w-min)/range)*innerH;
+    return {x, y, w:e.w, date:e.date};
+  });
+  const line = pts.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const gridLines = [0,0.5,1].map(f=>{
+    const y = (padTop + f*innerH).toFixed(1);
+    return `<line x1="${padX}" y1="${y}" x2="${w-padX}" y2="${y}" stroke="#2E2B25" stroke-width="1" stroke-dasharray="3,4"/>`;
+  }).join('');
+  const glow = pts.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="9" fill="#F5C518" opacity=".22" filter="url(#${gid})"/>`).join('');
+  const dots = pts.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="#F5C518" stroke="#0D0D0D" stroke-width="1.5"/>`).join('');
+  const labels = pts.map(p=>`<text x="${p.x.toFixed(1)}" y="${Math.max(13,p.y-13).toFixed(1)}" font-size="13" fill="#F5C518" text-anchor="middle" font-family="Oswald, sans-serif" font-weight="700">${p.w}</text>`).join('');
+  const dates = pts.map((p,i)=>{
+    const dateLbl = p.date.slice(8,10)+'/'+p.date.slice(5,7);
+    let arrow = '', color = '#948D7E';
+    if(i>0){
+      if(p.w > pts[i-1].w){ arrow=' ▲'; color='#5FD068'; }
+      else if(p.w < pts[i-1].w){ arrow=' ▼'; color='#FF6B5B'; }
+      else { arrow=' –'; color='#948D7E'; }
+    }
+    return `<text x="${p.x.toFixed(1)}" y="${h-8}" font-size="10" text-anchor="middle" font-family="Inter, sans-serif"><tspan fill="#948D7E">${dateLbl}</tspan><tspan fill="${color}" font-weight="700">${arrow}</tspan></text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" class="evo-linechart" style="width:100%; height:${h}px; display:block;">
+    <defs><filter id="${gid}" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="3.2"/></filter></defs>
+    ${gridLines}
+    <polyline points="${line}" fill="none" stroke="#F5C518" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${glow}${dots}${labels}${dates}
+  </svg>`;
+}
 function renderEvo(){
   const [mon, sun] = getWeekRange(new Date());
   const monthPrefix = todayStr().slice(0,7);
@@ -513,18 +551,8 @@ function renderEvo(){
     evoHist.innerHTML = '<div class="evo-empty">Assim que você mudar uma carga, o histórico aparece aqui.</div>';
   } else {
     evoHist.innerHTML = histKeys.map(k=>{
-      const entries = histWeights[k].slice(-8).slice().reverse(); // mais recente primeiro
-      const max = Math.max(...entries.map(e=>e.w), 1);
-      const rows = entries.map(e=>{
-        const pct = Math.max(6, Math.round((e.w/max)*100));
-        const dateLbl = e.date.slice(8,10)+'/'+e.date.slice(5,7);
-        return `<div class="evo-bar-row">
-          <span class="evo-bar-date">${dateLbl}</span>
-          <div class="evo-bar-track"><div class="evo-bar-fill" style="width:${pct}%"></div></div>
-          <span class="evo-bar-val">${e.w}kg</span>
-        </div>`;
-      }).join('');
-      return `<div class="evo-hist"><div class="name">${exLabels[k]||k}</div>${rows}</div>`;
+      const entries = histWeights[k].slice(-8); // cronológico, mais antigo à esquerda
+      return `<div class="evo-hist"><div class="name">${exLabels[k]||k}</div>${lineChartSVG(entries, k)}</div>`;
     }).join('');
   }
 }
@@ -646,7 +674,7 @@ function render(){
   document.getElementById('editToggle').onclick = toggleEditMode;
 
   const main = document.getElementById('main');
-  const banner = dayComplete(day) ? `
+  const banner = (!editMode && dayComplete(day)) ? `
     <div class="day-complete">
       <span class="fire">🔥🔥🔥</span>
       <div class="msg">Treino de ${day.label} 🔥 concluído!</div>
@@ -654,18 +682,26 @@ function render(){
     </div>` : '';
 
   const cardsHTML = exs.map(ex=>{
-    if(editMode && editingId === ex.id){
-      return `<div class="card" data-id="${ex.id}">
-        <div class="edit-form">
-          <label>Nome</label><input type="text" id="ef-n-${ex.id}" value="${(ex.n||'').replace(/"/g,'&quot;')}">
-          <label>Peso inicial (kg, opcional)</label><input type="number" id="ef-w-${ex.id}" value="${ex.w??''}">
-          <label>Link do vídeo (opcional)</label><input type="text" id="ef-v-${ex.id}" value="${(ex.v||'').replace(/"/g,'&quot;')}">
-          <label>Observação (opcional)</label><input type="text" id="ef-o-${ex.id}" value="${(ex.obs||'').replace(/"/g,'&quot;')}">
-          <div class="edit-form-actions">
-            <button class="edit-save" data-save="${ex.id}">Salvar</button>
-            <button class="edit-cancel" data-cancel="1">Cancelar</button>
+    if(editMode){
+      if(editingId === ex.id){
+        return `<div class="card" data-id="${ex.id}">
+          <div class="edit-form">
+            <label>Nome</label><input type="text" id="ef-n-${ex.id}" value="${(ex.n||'').replace(/"/g,'&quot;')}">
+            <label>Peso inicial (kg, opcional)</label><input type="number" id="ef-w-${ex.id}" value="${ex.w??''}">
+            <label>Link do vídeo (opcional)</label><input type="text" id="ef-v-${ex.id}" value="${(ex.v||'').replace(/"/g,'&quot;')}">
+            <label>Observação (opcional)</label><input type="text" id="ef-o-${ex.id}" value="${(ex.obs||'').replace(/"/g,'&quot;')}">
+            <div class="edit-form-actions">
+              <button class="edit-save" data-save="${ex.id}">Salvar</button>
+              <button class="edit-cancel" data-cancel="1">Cancelar</button>
+            </div>
           </div>
-        </div>
+        </div>`;
+      }
+      return `<div class="card editing-row" data-id="${ex.id}">
+        <span class="drag-handle">⠿</span>
+        <div class="ex-name-wrap"><div class="ex-name">${ex.n}</div></div>
+        <button class="icon-btn" data-edit="${ex.id}">✎</button>
+        <button class="icon-btn danger" data-del="${ex.id}">🗑</button>
       </div>`;
     }
     const k = normKey(ex.n);
@@ -685,14 +721,12 @@ function render(){
     const allDone = done[0] && done[1] && done[2];
     const setsHTML = [0,1,2].map(i=>`<button class="setdot${done[i]?' done':''}" data-card="${ex.id}" data-set="${i}" data-key="${k}" data-day="${day.id}">${i+1}</button>`).join('');
     const metaHTML = allDone ? `<span class="check-badge">✓ Concluído</span>` : `3 séries`;
-    const editIcons = editMode ? `<div class="edit-icons"><button class="icon-btn" data-edit="${ex.id}">✎ Editar</button><button class="icon-btn danger" data-del="${ex.id}">🗑 Excluir</button></div>` : '';
     return `<div class="card" data-id="${ex.id}" style="--dcolor:var(${day.color})">
       <div class="card-top">
         <span class="drag-handle">⠿</span>
         <div class="ex-name-wrap"><div class="ex-name">${allDone ? '🔥 ' : ''}${ex.n}</div><div class="ex-meta">${metaHTML}</div></div>
         ${weightHTML}
       </div>
-      ${editIcons}
       <div class="card-mid"><div class="sets">${setsHTML}</div></div>
       <div class="card-bottom">${obsHTML}${videoHTML}</div>
       ${cardTimerHTML(ex.id)}
@@ -700,7 +734,7 @@ function render(){
   }).join('');
 
   const addBtn = editMode ? `<button class="add-ex-btn" id="addExBtn">+ Adicionar exercício</button>` : '';
-  main.innerHTML = banner + `<div id="cardsList">${cardsHTML}</div>` + addBtn + isoCardHTML();
+  main.innerHTML = banner + `<div id="cardsList">${cardsHTML}</div>` + addBtn + (editMode ? '' : isoCardHTML());
 
   const restartBtn = document.getElementById('restartDay');
   if(restartBtn) restartBtn.onclick = ()=>{
