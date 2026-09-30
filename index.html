@@ -59,8 +59,8 @@ main{padding:4px 16px 90px; max-width:640px; margin:0 auto;}
   color:var(--ink); font-size:13px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; flex:0 0 auto;
 }
 .weight-val{
-  width:44px; min-width:0; text-align:center; font-size:16px; font-weight:700; border:none; background:transparent;
-  color:var(--ink); font-family:'Oswald',sans-serif; padding:0;
+  width:56px; min-width:0; text-align:center; font-size:18px; font-weight:700; border:1px solid var(--line); background:var(--bg);
+  color:var(--ink); font-family:'Oswald',sans-serif; padding:6px 2px; border-radius:8px;
 }
 .weight-val:focus{outline:none;}
 .unit{font-size:9.5px; color:var(--sub); margin-left:-2px;}
@@ -706,10 +706,8 @@ function render(){
     const wVal = hasWeight ? weights[k] : null;
     const weightHTML = hasWeight ? `
       <div class="weight-box">
-        <button class="stepper" data-act="minus" data-key="${k}">−</button>
         <input class="weight-val" data-key="${k}" type="number" step="1" value="${wVal}">
         <span class="unit">kg</span>
-        <button class="stepper" data-act="plus" data-key="${k}">+</button>
       </div>` : `<span class="no-weight">3 séries</span>`;
     const isRef = ex.v && ex.v.indexOf('pinterest') !== -1;
     const videoHTML = ex.v ? `<a class="video-btn" href="${ex.v}" target="_blank" rel="noopener noreferrer">${isRef?'🔗 Ver ref.':'▶ Vídeo'}</a>` : '';
