@@ -489,7 +489,6 @@ function getWeekRange(d){
 function lineChartSVG(entries, uid){
   const w = 300, h = 152, padX = 20, padTop = 26, padBottom = 30;
   const innerW = w - padX*2, innerH = h - padTop - padBottom;
-  const gid = 'evoglow-' + uid;
   const vals = entries.map(e=>e.w);
   const min = Math.min(...vals), max = Math.max(...vals);
   const range = (max - min) || 1;
@@ -503,7 +502,6 @@ function lineChartSVG(entries, uid){
     const y = (padTop + f*innerH).toFixed(1);
     return `<line x1="${padX}" y1="${y}" x2="${w-padX}" y2="${y}" stroke="#2E2B25" stroke-width="1" stroke-dasharray="3,4"/>`;
   }).join('');
-  const glow = pts.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="9" fill="#F5C518" opacity=".22" filter="url(#${gid})"/>`).join('');
   const dots = pts.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="#F5C518" stroke="#0D0D0D" stroke-width="1.5"/>`).join('');
   const labels = pts.map(p=>`<text x="${p.x.toFixed(1)}" y="${Math.max(13,p.y-13).toFixed(1)}" font-size="13" fill="#F5C518" text-anchor="middle" font-family="Oswald, sans-serif" font-weight="700">${p.w}</text>`).join('');
   const dates = pts.map((p,i)=>{
@@ -517,10 +515,9 @@ function lineChartSVG(entries, uid){
     return `<text x="${p.x.toFixed(1)}" y="${h-8}" font-size="10" text-anchor="middle" font-family="Inter, sans-serif"><tspan fill="#948D7E">${dateLbl}</tspan><tspan fill="${color}" font-weight="700">${arrow}</tspan></text>`;
   }).join('');
   return `<svg viewBox="0 0 ${w} ${h}" class="evo-linechart" style="width:100%; height:${h}px; display:block;">
-    <defs><filter id="${gid}" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="3.2"/></filter></defs>
     ${gridLines}
     <polyline points="${line}" fill="none" stroke="#F5C518" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-    ${glow}${dots}${labels}${dates}
+    ${dots}${labels}${dates}
   </svg>`;
 }
 function renderEvo(){
